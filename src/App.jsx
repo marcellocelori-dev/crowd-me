@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-// ─── Config ─────────────────────────────────────────────────
-const FSQ_KEY      = import.meta.env.VITE_FSQ_KEY;
+const GOOGLE_KEY   = import.meta.env.VITE_GOOGLE_KEY;
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 const supabase     = createClient(
   import.meta.env.VITE_SUPABASE_URL,
@@ -10,17 +9,16 @@ const supabase     = createClient(
 );
 
 // ─── Helpers ────────────────────────────────────────────────
-function categoryInfo(cats = []) {
-  const n = (cats[0]?.name || "").toLowerCase();
-  if (n.includes("nightclub") || n.includes("club"))   return { emoji: "🎧", type: "Club" };
-  if (n.includes("cocktail")  || n.includes("lounge")) return { emoji: "🍸", type: "Lounge" };
-  if (n.includes("rooftop")   || n.includes("terrazza")) return { emoji: "🌆", type: "Rooftop" };
-  if (n.includes("pub")       || n.includes("birreria")) return { emoji: "🍺", type: "Pub" };
-  if (n.includes("wine")      || n.includes("enoteca"))  return { emoji: "🍷", type: "Enoteca" };
-  if (n.includes("bar"))   return { emoji: "🍹", type: "Bar" };
-  if (n.includes("restaurant") || n.includes("ristorante")) return { emoji: "🍽️", type: "Ristorante" };
-  if (n.includes("caffe")  || n.includes("coffee")) return { emoji: "☕", type: "Caffè" };
-  return { emoji: "🏠", type: cats[0]?.name || "Locale" };
+function categoryInfo(types = []) {
+  const t = types.join(" ").toLowerCase();
+  if (t.includes("night_club")) return { emoji: "🎧", type: "Club" };
+  if (t.includes("bar"))        return { emoji: "🍹", type: "Bar" };
+  if (t.includes("pub"))        return { emoji: "🍺", type: "Pub" };
+  if (t.includes("restaurant")) return { emoji: "🍽️", type: "Ristorante" };
+  if (t.includes("cafe"))       return { emoji: "☕", type: "Caffè" };
+  if (t.includes("casino"))     return { emoji: "🎰", type: "Casino" };
+  if (t.includes("lounge"))     return { emoji: "🍸", type: "Lounge" };
+  return { emoji: "🏠", type: "Locale" };
 }
 
 function crowdColor(v) {
@@ -38,23 +36,31 @@ function timeAgo(ts) {
 }
 
 function formatDist(m) {
-  if (!m) return "";
-  return m < 1000 ? `${m}m` : `${(m / 1000).toFixed(1)}km`;
+  if (!m && m !== 0) return "";
+  return m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(1)}km`;
 }
 
-const ACOLORS = ["#FF6B9D","#FFB347","#87CEEB","#98FF98","#A78BFA","#FB923C","#F472B6"];
-function avatarColor(id = "") {
-  return ACOLORS[id.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % ACOLORS.length];
+function getDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-function fakeMetrics(fsqId) {
-  const seed = fsqId.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+function fakeMetrics(id) {
+  const seed = id.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
   return {
     crowd:    30 + (seed % 65),
     vibe:     40 + ((seed * 3) % 55),
     checkins: 10 + (seed % 120),
     trending: (30 + (seed % 65)) > 72,
   };
+}
+
+const ACOLORS = ["#FF6B9D","#FFB347","#87CEEB","#98FF98","#A78BFA","#FB923C","#F472B6"];
+function avatarColor(id = "") {
+  return ACOLORS[id.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % ACOLORS.length];
 }
 
 // ─── UI Atoms ───────────────────────────────────────────────
@@ -116,7 +122,7 @@ function Skeleton() {
   );
 }
 
-// ─── Mapbox Map ──────────────────────────────────────────────
+// ─── Mapbox ─────────────────────────────────────────────────
 function MapboxMap({ venues, userLocation, onVenueClick }) {
   const mapRef     = useRef(null);
   const mapInst    = useRef(null);
@@ -148,9 +154,7 @@ function MapboxMap({ venues, userLocation, onVenueClick }) {
       });
       const dot = document.createElement("div");
       dot.style.cssText = "width:18px;height:18px;border-radius:50%;background:#A78BFA;border:3px solid white;box-shadow:0 0 0 4px rgba(167,139,250,0.3);";
-      new window.mapboxgl.Marker({ element: dot })
-        .setLngLat([userLocation.lng, userLocation.lat])
-        .addTo(mapInst.current);
+      new window.mapboxgl.Marker({ element: dot }).setLngLat([userLocation.lng, userLocation.lat]).addTo(mapInst.current);
     } catch { setErr(true); }
   }, [ready, userLocation]);
 
@@ -173,10 +177,7 @@ function MapboxMap({ venues, userLocation, onVenueClick }) {
           <div style="font-size:11px;color:rgba(255,255,255,0.5);margin:2px 0 6px;">${v.zone} · ${v.type}</div>
           <div style="font-size:12px;color:${color};font-weight:700;">${v.crowd >= 85 ? "SOLD OUT 🔥" : v.crowd >= 70 ? "AFFOLLATO" : v.crowd >= 50 ? "ANIMATO" : "TRANQUILLO"}</div>
         </div>`);
-      const marker = new window.mapboxgl.Marker({ element: el })
-        .setLngLat([v.lng, v.lat])
-        .setPopup(popup)
-        .addTo(mapInst.current);
+      const marker = new window.mapboxgl.Marker({ element: el }).setLngLat([v.lng, v.lat]).setPopup(popup).addTo(mapInst.current);
       markersRef.current.push(marker);
     });
   }, [venues, ready, onVenueClick]);
@@ -201,42 +202,34 @@ function MapboxMap({ venues, userLocation, onVenueClick }) {
   );
 }
 
-// ─── Auth Screen ─────────────────────────────────────────────
-function AuthScreen({ onAuth }) {
-  const [mode, setMode]       = useState("login"); // login | signup
-  const [email, setEmail]     = useState("");
+// ─── Auth ────────────────────────────────────────────────────
+function AuthScreen() {
+  const [mode, setMode]         = useState("login");
+  const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState(null);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState(null);
 
   const handleSubmit = async () => {
     setLoading(true); setError(null);
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
-          email, password,
-          options: { data: { username, full_name: username } }
-        });
+        const { error } = await supabase.auth.signUp({ email, password, options: { data: { username, full_name: username } } });
         if (error) throw error;
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       }
-      onAuth();
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
   };
 
-  const inputStyle = {
+  const inp = {
     width: "100%", background: "rgba(255,255,255,0.06)",
     border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14,
     padding: "14px 16px", color: "#fff", fontSize: 15,
-    boxSizing: "border-box", fontFamily: "inherit", outline: "none",
-    marginBottom: 12,
+    boxSizing: "border-box", fontFamily: "inherit", outline: "none", marginBottom: 12,
   };
 
   return (
@@ -244,52 +237,39 @@ function AuthScreen({ onAuth }) {
       <div style={{ fontSize: 48, marginBottom: 8 }}>🎉</div>
       <div style={{ fontSize: 32, fontWeight: 900, letterSpacing: "-0.5px", background: "linear-gradient(135deg,#A78BFA,#F472B6,#FB923C)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", marginBottom: 4 }}>CROWD ME</div>
       <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 14, marginBottom: 40, textAlign: "center" }}>Scopri dove si sta meglio stanotte 🌙</div>
-
       <div style={{ display: "flex", gap: 8, marginBottom: 24, background: "rgba(255,255,255,0.05)", borderRadius: 14, padding: 4, width: "100%" }}>
         {["login","signup"].map(m => (
-          <button key={m} onClick={() => setMode(m)} style={{
-            flex: 1, padding: "10px", borderRadius: 10, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 14,
-            background: mode === m ? "rgba(167,139,250,0.3)" : "transparent",
-            color: mode === m ? "#A78BFA" : "rgba(255,255,255,0.4)",
-          }}>{m === "login" ? "Accedi" : "Registrati"}</button>
+          <button key={m} onClick={() => setMode(m)} style={{ flex: 1, padding: "10px", borderRadius: 10, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 14, background: mode === m ? "rgba(167,139,250,0.3)" : "transparent", color: mode === m ? "#A78BFA" : "rgba(255,255,255,0.4)" }}>
+            {m === "login" ? "Accedi" : "Registrati"}
+          </button>
         ))}
       </div>
-
-      {mode === "signup" && (
-        <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Username" style={inputStyle} />
-      )}
-      <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" type="email" style={inputStyle} />
-      <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" type="password" style={inputStyle} />
-
+      {mode === "signup" && <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Username" style={inp} />}
+      <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" type="email" style={inp} />
+      <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" type="password" style={inp} />
       {error && <div style={{ color: "#FF4757", fontSize: 13, marginBottom: 12, textAlign: "center" }}>{error}</div>}
-
-      <button onClick={handleSubmit} disabled={loading} style={{
-        width: "100%", padding: "16px",
-        background: "linear-gradient(135deg,#7C3AED,#F472B6)",
-        border: "none", borderRadius: 16, cursor: "pointer",
-        color: "#fff", fontWeight: 800, fontSize: 16,
-        boxShadow: "0 4px 20px rgba(124,58,237,0.4)",
-        opacity: loading ? 0.7 : 1,
-      }}>{loading ? "Caricamento..." : mode === "login" ? "Entra 🚀" : "Crea account 🎉"}</button>
+      <button onClick={handleSubmit} disabled={loading} style={{ width: "100%", padding: "16px", background: "linear-gradient(135deg,#7C3AED,#F472B6)", border: "none", borderRadius: 16, cursor: "pointer", color: "#fff", fontWeight: 800, fontSize: 16, boxShadow: "0 4px 20px rgba(124,58,237,0.4)", opacity: loading ? 0.7 : 1 }}>
+        {loading ? "Caricamento..." : mode === "login" ? "Entra 🚀" : "Crea account 🎉"}
+      </button>
     </div>
   );
 }
 
 // ─── Main App ────────────────────────────────────────────────
 export default function CrowdMe() {
-  const [session, setSession]       = useState(null);
-  const [profile, setProfile]       = useState(null);
-  const [tab, setTab]               = useState("discover");
-  const [venues, setVenues]         = useState([]);
+  const [session, setSession]           = useState(null);
+  const [profile, setProfile]           = useState(null);
+  const [tab, setTab]                   = useState("discover");
+  const [venues, setVenues]             = useState([]);
   const [loadingVenues, setLoadingVenues] = useState(true);
-  const [venueError, setVenueError] = useState(null);
+  const [venueError, setVenueError]     = useState(null);
   const [userLocation, setUserLocation] = useState(null);
-  const [cityName, setCityName]     = useState("Caricamento...");
-  const [checkedIn, setCheckedIn]   = useState(null);
-  const [feed, setFeed]             = useState([]);
-  const [loadingFeed, setLoadingFeed] = useState(false);
-  const [likedPosts, setLikedPosts] = useState({});
-  const [showCheckin, setShowCheckin] = useState(false);
+  const [cityName, setCityName]         = useState("Caricamento...");
+  const [checkedIn, setCheckedIn]       = useState(null);
+  const [feed, setFeed]                 = useState([]);
+  const [loadingFeed, setLoadingFeed]   = useState(false);
+  const [likedPosts, setLikedPosts]     = useState({});
+  const [showCheckin, setShowCheckin]   = useState(false);
   const [checkinVenue, setCheckinVenue] = useState(null);
   const [crowdSlider, setCrowdSlider]   = useState(70);
   const [vibeSlider, setVibeSlider]     = useState(75);
@@ -298,32 +278,26 @@ export default function CrowdMe() {
   const [checkinLoading, setCheckinLoading] = useState(false);
   const [filterType, setFilterType]     = useState("Tutti");
   const [searchRadius, setSearchRadius] = useState(1000);
-  const [selectedMapVenue, setSelectedMapVenue] = useState(null);
   const [notifPulse, setNotifPulse]     = useState(true);
-  const [followers, setFollowers]       = useState([]);
   const [following, setFollowing]       = useState([]);
+  const [followers, setFollowers]       = useState([]);
 
-  // ── Auth ──────────────────────────────────────────────────
+  // Auth
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => setSession(session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
     return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
     if (!session) return;
-    supabase.from("profiles").select("*").eq("id", session.user.id).single()
-      .then(({ data }) => setProfile(data));
+    supabase.from("profiles").select("*").eq("id", session.user.id).single().then(({ data }) => setProfile(data));
   }, [session]);
 
-  // ── Geolocation ───────────────────────────────────────────
+  // Geolocation
   useEffect(() => {
     if (!session) return;
-    if (!navigator.geolocation) {
-      setUserLocation({ lat: 45.4642, lng: 9.1900 });
-      setCityName("Milano (default)");
-      return;
-    }
+    if (!navigator.geolocation) { setUserLocation({ lat: 45.4642, lng: 9.1900 }); setCityName("Milano (default)"); return; }
     navigator.geolocation.getCurrentPosition(
       pos => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       ()  => { setUserLocation({ lat: 45.4642, lng: 9.1900 }); setCityName("Milano (default)"); },
@@ -331,92 +305,111 @@ export default function CrowdMe() {
     );
   }, [session]);
 
-  // ── Foursquare ────────────────────────────────────────────
+  // Google Places API - Nearby Search
   const fetchVenues = useCallback(async (lat, lng, radius) => {
     setLoadingVenues(true); setVenueError(null);
     try {
-      const cats = "13003,13035,13032,13338,13036,10032";
-      const url  = `https://api.foursquare.com/v3/places/search?ll=${lat},${lng}&radius=${radius}&categories=${cats}&limit=20&sort=POPULARITY&fields=fsq_id,name,categories,location,distance,geocodes`;
-      const res  = await fetch(url, { headers: { Authorization: FSQ_KEY, Accept: "application/json" } });
+      const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&type=bar|night_club|restaurant&key=${GOOGLE_KEY}`;
+
+      // Google Places non supporta CORS direttamente, usiamo un proxy
+      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+      const res = await fetch(proxyUrl);
       if (!res.ok) throw new Error(`Errore ${res.status}`);
       const data = await res.json();
-      if (!data.results?.length) { setVenueError("Nessun locale trovato. Prova ad allargare il raggio."); setVenues([]); return; }
-      if (data.results[0]?.location?.locality) setCityName(data.results[0].location.locality);
-      const mapped = data.results.map(p => {
-        const { emoji, type } = categoryInfo(p.categories);
-        const metrics = fakeMetrics(p.fsq_id);
+
+      if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+        throw new Error(`Google Places: ${data.status}`);
+      }
+
+      if (!data.results?.length) {
+        setVenueError("Nessun locale trovato. Prova ad allargare il raggio.");
+        setVenues([]); setLoadingVenues(false); return;
+      }
+
+      // Città dalla prima risposta
+      if (data.results[0]?.vicinity) {
+        const parts = data.results[0].vicinity.split(",");
+        setCityName(parts[parts.length - 1].trim());
+      }
+
+      const mapped = data.results.map(place => {
+        const { emoji, type } = categoryInfo(place.types || []);
+        const metrics = fakeMetrics(place.place_id);
+        const placeLat = place.geometry?.location?.lat;
+        const placeLng = place.geometry?.location?.lng;
+        const dist = (placeLat && placeLng) ? getDistance(lat, lng, placeLat, placeLng) : null;
+        const vicinity = place.vicinity || "";
+        const zone = vicinity.split(",")[0] || "—";
+
         return {
-          id: p.fsq_id, name: p.name, type, emoji,
-          zone: p.location?.neighborhood?.[0] || p.location?.locality || "—",
-          address: p.location?.formatted_address || "",
-          distance: p.distance,
-          lat: p.geocodes?.main?.latitude  || null,
-          lng: p.geocodes?.main?.longitude || null,
-          tags: p.categories.map(c => c.name.toLowerCase().replace(/ /g, "-")).slice(0, 3),
+          id: place.place_id,
+          name: place.name,
+          type, emoji,
+          zone,
+          address: vicinity,
+          distance: dist,
+          lat: placeLat,
+          lng: placeLng,
+          tags: (place.types || []).slice(0, 3).map(t => t.replace(/_/g, " ")),
+          rating: place.rating,
           ...metrics,
         };
       });
+
       setVenues(mapped);
 
-      // Salva locali su Supabase (upsert silenzioso)
+      // Salva su Supabase
       const rows = mapped.map(v => ({ id: v.id, name: v.name, type: v.type, emoji: v.emoji, address: v.address, zone: v.zone, lat: v.lat, lng: v.lng, tags: v.tags }));
       supabase.from("venues").upsert(rows, { onConflict: "id" });
-    } catch { setVenueError("Impossibile caricare i locali."); }
-    finally { setLoadingVenues(false); }
+
+    } catch (e) {
+      console.error(e);
+      setVenueError("Impossibile caricare i locali: " + e.message);
+    } finally {
+      setLoadingVenues(false);
+    }
   }, []);
 
   useEffect(() => {
     if (userLocation) fetchVenues(userLocation.lat, userLocation.lng, searchRadius);
   }, [userLocation, searchRadius, fetchVenues]);
 
-  // ── Feed reale da Supabase ─────────────────────────────────
+  // Feed
   const fetchFeed = useCallback(async () => {
     if (!session) return;
     setLoadingFeed(true);
-    const { data } = await supabase
-      .from("friend_feed")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(30);
+    const { data } = await supabase.from("friend_feed").select("*").order("created_at", { ascending: false }).limit(30);
     if (data) setFeed(data);
     setLoadingFeed(false);
   }, [session]);
 
-  useEffect(() => {
-    if (tab === "feed") fetchFeed();
-  }, [tab, fetchFeed]);
+  useEffect(() => { if (tab === "feed") fetchFeed(); }, [tab, fetchFeed]);
 
-  // Realtime feed
   useEffect(() => {
     if (!session) return;
-    const channel = supabase.channel("checkins-realtime")
+    const channel = supabase.channel("checkins-rt")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "checkins" }, () => fetchFeed())
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [session, fetchFeed]);
 
-  // ── Follower / Following ───────────────────────────────────
+  // Followers
   useEffect(() => {
     if (!session) return;
-    supabase.from("follows").select("following_id").eq("follower_id", session.user.id)
-      .then(({ data }) => setFollowing((data || []).map(r => r.following_id)));
-    supabase.from("follows").select("follower_id").eq("following_id", session.user.id)
-      .then(({ data }) => setFollowers((data || []).map(r => r.follower_id)));
+    supabase.from("follows").select("following_id").eq("follower_id", session.user.id).then(({ data }) => setFollowing((data || []).map(r => r.following_id)));
+    supabase.from("follows").select("follower_id").eq("following_id", session.user.id).then(({ data }) => setFollowers((data || []).map(r => r.follower_id)));
   }, [session]);
 
-  // ── Likes ──────────────────────────────────────────────────
+  // Like
   const toggleLike = async (checkinId) => {
     if (!session) return;
     const liked = likedPosts[checkinId];
     setLikedPosts(p => ({ ...p, [checkinId]: !liked }));
-    if (liked) {
-      await supabase.from("checkin_likes").delete().eq("user_id", session.user.id).eq("checkin_id", checkinId);
-    } else {
-      await supabase.from("checkin_likes").insert({ user_id: session.user.id, checkin_id: checkinId });
-    }
+    if (liked) await supabase.from("checkin_likes").delete().eq("user_id", session.user.id).eq("checkin_id", checkinId);
+    else await supabase.from("checkin_likes").insert({ user_id: session.user.id, checkin_id: checkinId });
   };
 
-  // ── Check-in ───────────────────────────────────────────────
+  // Check-in
   const openCheckin = (venue) => {
     setCheckinVenue(venue); setShowCheckin(true);
     setCrowdSlider(venue.crowd); setVibeSlider(venue.vibe); setCheckinMsg("");
@@ -426,30 +419,18 @@ export default function CrowdMe() {
     if (!session || !checkinVenue) return;
     setCheckinLoading(true);
     const { error } = await supabase.from("checkins").insert({
-      user_id:  session.user.id,
-      venue_id: checkinVenue.id,
-      crowd:    crowdSlider,
-      vibe:     vibeSlider,
-      message:  checkinMsg || null,
+      user_id: session.user.id, venue_id: checkinVenue.id,
+      crowd: crowdSlider, vibe: vibeSlider, message: checkinMsg || null,
     });
-    if (!error) {
-      setCheckedIn(checkinVenue.id);
-      setCheckinDone(true);
-      setTimeout(() => { setShowCheckin(false); setCheckinDone(false); }, 2200);
-    }
+    if (!error) { setCheckedIn(checkinVenue.id); setCheckinDone(true); setTimeout(() => { setShowCheckin(false); setCheckinDone(false); }, 2200); }
     setCheckinLoading(false);
   };
 
-  const signOut = () => supabase.auth.signOut();
-
-  // ── Derived ────────────────────────────────────────────────
   const types    = ["Tutti", ...Array.from(new Set(venues.map(v => v.type)))];
   const filtered = venues.filter(v => filterType === "Tutti" || v.type === filterType).sort((a, b) => b.crowd - a.crowd);
 
-  // ── Not logged in ──────────────────────────────────────────
-  if (!session) return <AuthScreen onAuth={() => {}} />;
+  if (!session) return <AuthScreen />;
 
-  // ── UI ─────────────────────────────────────────────────────
   return (
     <div style={{ background: "#0A0A0F", minHeight: "100vh", maxWidth: 430, margin: "0 auto", fontFamily: "'DM Sans','Segoe UI',sans-serif", position: "relative", overflowX: "hidden", color: "#fff" }}>
       <div style={{ position: "fixed", top: -80, left: "50%", transform: "translateX(-50%)", width: 300, height: 200, background: "radial-gradient(ellipse,#7C3AED44 0%,transparent 70%)", pointerEvents: "none", zIndex: 0 }} />
@@ -466,26 +447,23 @@ export default function CrowdMe() {
               🔔
               {notifPulse && <div style={{ position: "absolute", top: 8, right: 9, width: 8, height: 8, background: "#F472B6", borderRadius: "50%", animation: "pulse 1.5s infinite" }} />}
             </button>
-            <div onClick={() => setTab("profile")} style={{ cursor: "pointer" }}>
-              <Avatar profile={profile} size={40} />
-            </div>
+            <div onClick={() => setTab("profile")} style={{ cursor: "pointer" }}><Avatar profile={profile} size={40} /></div>
           </div>
         </div>
       </div>
 
       <div style={{ padding: "0 0 100px" }}>
 
-        {/* ── DISCOVER ── */}
+        {/* DISCOVER */}
         {tab === "discover" && (
           <div>
-            {/* Raggio */}
             <div style={{ padding: "16px 20px 0" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                 <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", fontWeight: 600, letterSpacing: 1 }}>📡 RAGGIO DI RICERCA</div>
                 <span style={{ fontSize: 12, color: "#A78BFA", fontWeight: 700 }}>{searchRadius >= 1000 ? `${searchRadius/1000}km` : `${searchRadius}m`}</span>
               </div>
               <div style={{ display: "flex", gap: 6 }}>
-                {[500, 1000, 2000, 5000].map(r => (
+                {[500,1000,2000,5000].map(r => (
                   <button key={r} onClick={() => setSearchRadius(r)} style={{ flex: 1, padding: "7px 0", borderRadius: 12, border: "1px solid", borderColor: searchRadius === r ? "#A78BFA" : "rgba(255,255,255,0.1)", background: searchRadius === r ? "rgba(167,139,250,0.2)" : "transparent", color: searchRadius === r ? "#A78BFA" : "rgba(255,255,255,0.4)", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
                     {r >= 1000 ? `${r/1000}km` : `${r}m`}
                   </button>
@@ -493,7 +471,6 @@ export default function CrowdMe() {
               </div>
             </div>
 
-            {/* Trending */}
             {!loadingVenues && venues.filter(v => v.trending).length > 0 && (
               <div style={{ padding: "16px 20px 0" }}>
                 <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", fontWeight: 600, letterSpacing: 1, marginBottom: 10 }}>🔥 IN TREND VICINO A TE</div>
@@ -503,17 +480,13 @@ export default function CrowdMe() {
                       <div style={{ fontSize: 26, marginBottom: 4 }}>{v.emoji}</div>
                       <div style={{ fontWeight: 800, fontSize: 15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v.name}</div>
                       <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 8 }}>{v.zone} · {formatDist(v.distance)}</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <CrowdBar value={v.crowd} color="#A78BFA" />
-                        <CrowdLabel value={v.crowd} />
-                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}><CrowdBar value={v.crowd} color="#A78BFA" /><CrowdLabel value={v.crowd} /></div>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Filtri */}
             <div style={{ padding: "12px 20px 0" }}>
               <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4 }}>
                 {types.map(t => (
@@ -522,7 +495,6 @@ export default function CrowdMe() {
               </div>
             </div>
 
-            {/* Lista locali */}
             <div style={{ padding: "14px 20px 0", display: "flex", flexDirection: "column", gap: 12 }}>
               {loadingVenues && Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} />)}
               {venueError && !loadingVenues && (
@@ -532,7 +504,7 @@ export default function CrowdMe() {
                   <button onClick={() => userLocation && fetchVenues(userLocation.lat, userLocation.lng, searchRadius)} style={{ marginTop: 12, padding: "10px 24px", background: "rgba(167,139,250,0.2)", border: "1px solid #A78BFA", borderRadius: 12, color: "#A78BFA", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>Riprova</button>
                 </div>
               )}
-              {!loadingVenues && filtered.map(v => (
+              {!loadingVenues && !venueError && filtered.map(v => (
                 <div key={v.id} onClick={() => openCheckin(v)} style={{ background: "rgba(255,255,255,0.04)", border: checkedIn === v.id ? "1px solid rgba(123,237,159,0.4)" : "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: "16px 18px", cursor: "pointer", position: "relative", overflow: "hidden" }}>
                   {checkedIn === v.id && <div style={{ position: "absolute", top: 10, right: 12, background: "rgba(123,237,159,0.15)", border: "1px solid #7BED9F", borderRadius: 8, padding: "2px 8px", fontSize: 10, color: "#7BED9F", fontWeight: 700 }}>✓ CI SEI</div>}
                   <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
@@ -541,7 +513,7 @@ export default function CrowdMe() {
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                         <div style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                           <div style={{ fontWeight: 800, fontSize: 15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.name}</div>
-                          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{v.type} · {v.zone}{v.distance ? <span style={{ color: "#A78BFA", marginLeft: 4 }}>· {formatDist(v.distance)}</span> : ""}</div>
+                          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{v.type} · {v.zone}{v.distance != null ? <span style={{ color: "#A78BFA", marginLeft: 4 }}>· {formatDist(v.distance)}</span> : ""}</div>
                         </div>
                         <VibeScore value={v.vibe} />
                       </div>
@@ -562,7 +534,7 @@ export default function CrowdMe() {
           </div>
         )}
 
-        {/* ── FEED ── */}
+        {/* FEED */}
         {tab === "feed" && (
           <div style={{ padding: "16px 20px 0", display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", fontWeight: 600, letterSpacing: 1, marginBottom: 4 }}>📡 AGGIORNAMENTI IN TEMPO REALE</div>
@@ -571,7 +543,7 @@ export default function CrowdMe() {
               <div style={{ textAlign: "center", padding: "60px 20px", color: "rgba(255,255,255,0.3)" }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>👀</div>
                 <div style={{ fontWeight: 700, marginBottom: 6 }}>Nessun aggiornamento</div>
-                <div style={{ fontSize: 13 }}>Segui altri utenti per vedere i loro check-in!</div>
+                <div style={{ fontSize: 13 }}>Fai un check-in per primo!</div>
               </div>
             )}
             {feed.map(post => (
@@ -590,7 +562,7 @@ export default function CrowdMe() {
                     <CrowdBar value={post.crowd} color="#F472B6" />
                     <CrowdLabel value={post.crowd} />
                   </div>
-                  <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <button onClick={() => toggleLike(post.id)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, opacity: likedPosts[post.id] ? 1 : 0.4, transition: "all 0.15s", transform: likedPosts[post.id] ? "scale(1.2)" : "scale(1)" }}>❤️</button>
                     <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>{post.likes_count || 0}</span>
                   </div>
@@ -600,11 +572,11 @@ export default function CrowdMe() {
           </div>
         )}
 
-        {/* ── MAP ── */}
+        {/* MAP */}
         {tab === "map" && (
           <div style={{ padding: "16px 20px 0" }}>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", fontWeight: 600, letterSpacing: 1, marginBottom: 12 }}>🗺️ LOCALI VICINO A TE</div>
-            <MapboxMap venues={venues} userLocation={userLocation} onVenueClick={v => { setSelectedMapVenue(v); openCheckin(v); }} />
+            <MapboxMap venues={venues} userLocation={userLocation} onVenueClick={v => openCheckin(v)} />
             <div style={{ display: "flex", gap: 16, marginTop: 12, justifyContent: "center" }}>
               {[["#FF4757","Sold out"],["#FFA502","Animato"],["#7BED9F","Tranquillo"]].map(([c,l]) => (
                 <div key={l} style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -629,22 +601,20 @@ export default function CrowdMe() {
           </div>
         )}
 
-        {/* ── PROFILE ── */}
+        {/* PROFILE */}
         {tab === "profile" && (
           <div style={{ padding: "16px 20px 0" }}>
             <div style={{ background: "linear-gradient(135deg,rgba(124,58,237,0.3),rgba(244,114,182,0.2))", border: "1px solid rgba(167,139,250,0.25)", borderRadius: 24, padding: "24px 20px", textAlign: "center", marginBottom: 20 }}>
-              <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
-                <Avatar profile={profile} size={70} />
-              </div>
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}><Avatar profile={profile} size={70} /></div>
               <div style={{ fontWeight: 800, fontSize: 20 }}>{profile?.full_name || profile?.username || "Utente"}</div>
               <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 13, marginBottom: 14 }}>@{profile?.username} · {cityName}</div>
               <div style={{ display: "flex", justifyContent: "center", gap: 30 }}>
-                {[["—", "Check-in"], [followers.length, "Follower"], [following.length, "Following"]].map(([n, l]) => (
+                {[["—","Check-in"],[followers.length,"Follower"],[following.length,"Following"]].map(([n,l]) => (
                   <div key={l}><div style={{ fontWeight: 800, fontSize: 20 }}>{n}</div><div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{l}</div></div>
                 ))}
               </div>
             </div>
-            <button onClick={signOut} style={{ width: "100%", padding: "14px", background: "rgba(255,71,87,0.15)", border: "1px solid rgba(255,71,87,0.3)", borderRadius: 16, color: "#FF4757", fontWeight: 700, fontSize: 15, cursor: "pointer", marginBottom: 16 }}>
+            <button onClick={() => supabase.auth.signOut()} style={{ width: "100%", padding: "14px", background: "rgba(255,71,87,0.15)", border: "1px solid rgba(255,71,87,0.3)", borderRadius: 16, color: "#FF4757", fontWeight: 700, fontSize: 15, cursor: "pointer", marginBottom: 16 }}>
               Esci dall'account
             </button>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", fontWeight: 600, letterSpacing: 1, marginBottom: 10 }}>📍 LOCALI VICINO A TE</div>
@@ -666,7 +636,7 @@ export default function CrowdMe() {
       {/* Bottom Nav */}
       <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: "rgba(10,10,15,0.95)", backdropFilter: "blur(20px)", borderTop: "1px solid rgba(255,255,255,0.06)", padding: "10px 0 20px", zIndex: 200 }}>
         <div style={{ display: "flex", justifyContent: "space-around", alignItems: "center" }}>
-          {[{ key: "discover", icon: "🔍", label: "Scopri" }, { key: "feed", icon: "📡", label: "Feed" }, { key: "map", icon: "🗺️", label: "Mappa" }, { key: "profile", icon: "👤", label: "Profilo" }].map(item => (
+          {[{key:"discover",icon:"🔍",label:"Scopri"},{key:"feed",icon:"📡",label:"Feed"},{key:"map",icon:"🗺️",label:"Mappa"},{key:"profile",icon:"👤",label:"Profilo"}].map(item => (
             <button key={item.key} onClick={() => setTab(item.key)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, background: "none", border: "none", cursor: "pointer", padding: "4px 16px", borderRadius: 12 }}>
               <span style={{ fontSize: 22 }}>{item.icon}</span>
               <span style={{ fontSize: 10, fontWeight: 700, color: tab === item.key ? "#A78BFA" : "rgba(255,255,255,0.3)" }}>{item.label}</span>
