@@ -337,9 +337,9 @@ export default function CrowdMe() {
       }
 
       // Città
-      if (data.places[0]?.shortFormattedAddress) {
-        const parts = data.places[0].shortFormattedAddress.split(",");
-        setCityName(parts[parts.length - 1].trim());
+      if (data.places[0]?.formattedAddress) {
+        const parts = data.places[0].formattedAddress.split(",");
+        setCityName(parts[parts.length - 2]?.trim() || "Milano");
       }
 
       const mapped = data.places.map(place => {
@@ -348,13 +348,17 @@ export default function CrowdMe() {
         const placeLat = place.location?.latitude;
         const placeLng = place.location?.longitude;
         const dist = (placeLat && placeLng) ? getDistance(lat, lng, placeLat, placeLng) : null;
-        const vicinity = place.shortFormattedAddress || place.formattedAddress || "";
-        const zone = vicinity.split(",")[0] || "—";
+        const short = place.shortFormattedAddress || "";
+        const vicinity = place.formattedAddress || short;
+        const zone = short.split(",")[0] || vicinity.split(",")[0] || "—";
 
         return {
           id: place.id,
           name: place.displayName?.text || "Locale",
           type, emoji,
+          zone,
+          address: vicinity,
+          distance: dist,
           lat: placeLat,
           lng: placeLng,
           tags: (place.types || []).slice(0, 3).map(t => t.replace(/_/g, " ")),
