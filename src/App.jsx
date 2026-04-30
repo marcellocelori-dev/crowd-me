@@ -314,13 +314,16 @@ export default function CrowdMe() {
         headers: {
           "Content-Type": "application/json",
           "X-Goog-Api-Key": GOOGLE_KEY,
-          "X-Goog-FieldMask": "places.id,places.displayName,places.types,places.formattedAddress,places.location,places.primaryTypeDisplayName,places.shortFormattedAddress",
+          "X-Goog-FieldMask": "places.id,places.displayName,places.types,places.formattedAddress,places.location,places.shortFormattedAddress",
         },
         body: JSON.stringify({
-          includedTypes: ["bar", "night_club", "restaurant", "cafe"],
+          includedTypes: ["bar", "night_club", "cafe"],
           maxResultCount: 20,
           locationRestriction: {
-            circle: { center: { latitude: lat, longitude: lng }, radius: radius }
+            circle: {
+              center: { latitude: lat, longitude: lng },
+              radius: parseFloat(radius)
+            }
           }
         })
       });
@@ -346,7 +349,7 @@ export default function CrowdMe() {
         const placeLng = place.location?.longitude;
         const dist = (placeLat && placeLng) ? getDistance(lat, lng, placeLat, placeLng) : null;
         const vicinity = place.shortFormattedAddress || place.formattedAddress || "";
-        const zone = place.primaryTypeDisplayName?.text || vicinity.split(",")[0] || "—";
+        const zone = vicinity.split(",")[0] || "—";
 
         return {
           id: place.id,
