@@ -305,53 +305,56 @@ export default function CrowdMe() {
     );
   }, [session]);
 
-  // Google Places API - Nearby Search
+  // Google Places API (New) - supporta CORS nativamente
   const fetchVenues = useCallback(async (lat, lng, radius) => {
     setLoadingVenues(true); setVenueError(null);
     try {
-      const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&type=bar|night_club|restaurant&key=${GOOGLE_KEY}`;
+      const res = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": GOOGLE_KEY,
+          "X-Goog-FieldMask": "places.id,places.displayName,places.types,places.formattedAddress,places.location,places.primaryTypeDisplayName,places.shortFormattedAddress",
+        },
+        body: JSON.stringify({
+          includedTypes: ["bar", "night_club", "restaurant", "cafe"],
+          maxResultCount: 20,
+          locationRestriction: {
+            circle: { center: { latitude: lat, longitude: lng }, radius: radius }
+          }
+        })
+      });
 
-      // Google Places non supporta CORS direttamente, usiamo un proxy
-      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-      const res = await fetch(proxyUrl);
       if (!res.ok) throw new Error(`Errore ${res.status}`);
       const data = await res.json();
 
-      if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
-        throw new Error(`Google Places: ${data.status}`);
-      }
-
-      if (!data.results?.length) {
+      if (!data.places?.length) {
         setVenueError("Nessun locale trovato. Prova ad allargare il raggio.");
         setVenues([]); setLoadingVenues(false); return;
       }
 
-      // Città dalla prima risposta
-      if (data.results[0]?.vicinity) {
-        const parts = data.results[0].vicinity.split(",");
+      // Città
+      if (data.places[0]?.shortFormattedAddress) {
+        const parts = data.places[0].shortFormattedAddress.split(",");
         setCityName(parts[parts.length - 1].trim());
       }
 
-      const mapped = data.results.map(place => {
+      const mapped = data.places.map(place => {
         const { emoji, type } = categoryInfo(place.types || []);
-        const metrics = fakeMetrics(place.place_id);
-        const placeLat = place.geometry?.location?.lat;
-        const placeLng = place.geometry?.location?.lng;
+        const metrics = fakeMetrics(place.id);
+        const placeLat = place.location?.latitude;
+        const placeLng = place.location?.longitude;
         const dist = (placeLat && placeLng) ? getDistance(lat, lng, placeLat, placeLng) : null;
-        const vicinity = place.vicinity || "";
-        const zone = vicinity.split(",")[0] || "—";
+        const vicinity = place.shortFormattedAddress || place.formattedAddress || "";
+        const zone = place.primaryTypeDisplayName?.text || vicinity.split(",")[0] || "—";
 
         return {
-          id: place.place_id,
-          name: place.name,
+          id: place.id,
+          name: place.displayName?.text || "Locale",
           type, emoji,
-          zone,
-          address: vicinity,
-          distance: dist,
           lat: placeLat,
           lng: placeLng,
           tags: (place.types || []).slice(0, 3).map(t => t.replace(/_/g, " ")),
-          rating: place.rating,
           ...metrics,
         };
       });
