@@ -202,21 +202,44 @@ function MapboxMap({ venues, userLocation, onVenueClick }) {
   );
 }
 
+// ─── Email Confirmed Page ────────────────────────────────────
+function EmailConfirmedPage() {
+  return (
+    <div style={{ background: "#0A0A0F", minHeight: "100vh", maxWidth: 430, margin: "0 auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 28px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: "#fff", textAlign: "center" }}>
+      <div style={{ fontSize: 72, marginBottom: 20 }}>🎉</div>
+      <div style={{ fontSize: 28, fontWeight: 900, background: "linear-gradient(135deg,#A78BFA,#F472B6,#FB923C)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", marginBottom: 12 }}>Benvenuto su Crowd Me!</div>
+      <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 16, lineHeight: 1.6, marginBottom: 32 }}>
+        La tua email è stata confermata con successo. 🙌<br/>
+        Il tuo account è attivo e pronto all'uso!
+      </div>
+      <button onClick={() => window.location.href = "/"} style={{ width: "100%", padding: "16px", background: "linear-gradient(135deg,#7C3AED,#F472B6)", border: "none", borderRadius: 16, cursor: "pointer", color: "#fff", fontWeight: 800, fontSize: 16, boxShadow: "0 4px 20px rgba(124,58,237,0.4)" }}>
+        Entra nell'app 🚀
+      </button>
+    </div>
+  );
+}
+
 // ─── Auth ────────────────────────────────────────────────────
 function AuthScreen() {
-  const [mode, setMode]         = useState("login");
-  const [email, setEmail]       = useState("");
-  const [password, setPassword] = useState("");
-  const [username, setUsername] = useState("");
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState(null);
+  const [mode, setMode]           = useState("login");
+  const [email, setEmail]         = useState("");
+  const [password, setPassword]   = useState("");
+  const [username, setUsername]   = useState("");
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [signupDone, setSignupDone]     = useState(false);
 
   const handleSubmit = async () => {
     setLoading(true); setError(null);
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({ email, password, options: { data: { username, full_name: username } } });
+        const { error } = await supabase.auth.signUp({
+          email, password,
+          options: { data: { username, full_name: username } }
+        });
         if (error) throw error;
+        setSignupDone(true);
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
@@ -232,6 +255,22 @@ function AuthScreen() {
     boxSizing: "border-box", fontFamily: "inherit", outline: "none", marginBottom: 12,
   };
 
+  // Schermata dopo la registrazione — attendi conferma email
+  if (signupDone) return (
+    <div style={{ background: "#0A0A0F", minHeight: "100vh", maxWidth: 430, margin: "0 auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 28px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: "#fff", textAlign: "center" }}>
+      <div style={{ fontSize: 72, marginBottom: 20 }}>📧</div>
+      <div style={{ fontSize: 26, fontWeight: 900, background: "linear-gradient(135deg,#A78BFA,#F472B6,#FB923C)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", marginBottom: 12 }}>Controlla la tua email!</div>
+      <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 15, lineHeight: 1.7, marginBottom: 32 }}>
+        Ti abbiamo inviato un link di conferma a<br/>
+        <span style={{ color: "#A78BFA", fontWeight: 700 }}>{email}</span><br/><br/>
+        Clicca il link nell'email per attivare il tuo account e accedere a Crowd Me! 🎉
+      </div>
+      <button onClick={() => { setSignupDone(false); setMode("login"); }} style={{ width: "100%", padding: "16px", background: "rgba(167,139,250,0.2)", border: "1px solid #A78BFA", borderRadius: 16, cursor: "pointer", color: "#A78BFA", fontWeight: 800, fontSize: 15 }}>
+        Torna al login
+      </button>
+    </div>
+  );
+
   return (
     <div style={{ background: "#0A0A0F", minHeight: "100vh", maxWidth: 430, margin: "0 auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 28px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: "#fff" }}>
       <div style={{ fontSize: 48, marginBottom: 8 }}>🎉</div>
@@ -239,15 +278,31 @@ function AuthScreen() {
       <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 14, marginBottom: 40, textAlign: "center" }}>Scopri dove si sta meglio stanotte 🌙</div>
       <div style={{ display: "flex", gap: 8, marginBottom: 24, background: "rgba(255,255,255,0.05)", borderRadius: 14, padding: 4, width: "100%" }}>
         {["login","signup"].map(m => (
-          <button key={m} onClick={() => setMode(m)} style={{ flex: 1, padding: "10px", borderRadius: 10, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 14, background: mode === m ? "rgba(167,139,250,0.3)" : "transparent", color: mode === m ? "#A78BFA" : "rgba(255,255,255,0.4)" }}>
+          <button key={m} onClick={() => { setMode(m); setError(null); }} style={{ flex: 1, padding: "10px", borderRadius: 10, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 14, background: mode === m ? "rgba(167,139,250,0.3)" : "transparent", color: mode === m ? "#A78BFA" : "rgba(255,255,255,0.4)" }}>
             {m === "login" ? "Accedi" : "Registrati"}
           </button>
         ))}
       </div>
       {mode === "signup" && <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Username" style={inp} />}
       <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" type="email" style={inp} />
-      <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" type="password" style={inp} />
-      {error && <div style={{ color: "#FF4757", fontSize: 13, marginBottom: 12, textAlign: "center" }}>{error}</div>}
+      {/* Password con mostra/nascondi */}
+      <div style={{ position: "relative", width: "100%", marginBottom: 12 }}>
+        <input
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+          placeholder="Password"
+          type={showPassword ? "text" : "password"}
+          style={{ ...inp, marginBottom: 0, paddingRight: 50 }}
+        />
+        <button onClick={() => setShowPassword(p => !p)} style={{
+          position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)",
+          background: "none", border: "none", cursor: "pointer",
+          fontSize: 18, opacity: 0.6, padding: 0,
+        }}>
+          {showPassword ? "🙈" : "👁️"}
+        </button>
+      </div>
+      {error && <div style={{ color: "#FF4757", fontSize: 13, marginBottom: 12, textAlign: "center", width: "100%" }}>{error}</div>}
       <button onClick={handleSubmit} disabled={loading} style={{ width: "100%", padding: "16px", background: "linear-gradient(135deg,#7C3AED,#F472B6)", border: "none", borderRadius: 16, cursor: "pointer", color: "#fff", fontWeight: 800, fontSize: 16, boxShadow: "0 4px 20px rgba(124,58,237,0.4)", opacity: loading ? 0.7 : 1 }}>
         {loading ? "Caricamento..." : mode === "login" ? "Entra 🚀" : "Crea account 🎉"}
       </button>
@@ -438,6 +493,13 @@ export default function CrowdMe() {
 
   const types    = ["Tutti", ...Array.from(new Set(venues.map(v => v.type)))];
   const filtered = venues.filter(v => filterType === "Tutti" || v.type === filterType).sort((a, b) => b.crowd - a.crowd);
+
+  // Pagina di conferma email (quando l'utente clicca il link)
+  const urlParams = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.replace("#", "?"));
+  if (urlParams.get("type") === "signup" || hashParams.get("type") === "signup") {
+    return <EmailConfirmedPage />;
+  }
 
   if (!session) return <AuthScreen />;
 
