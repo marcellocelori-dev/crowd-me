@@ -202,6 +202,58 @@ function MapboxMap({ venues, userLocation, onVenueClick }) {
   );
 }
 
+// ─── Reset Password Page (quando l'utente clicca il link nell'email) ──
+function ResetPasswordPage() {
+  const [password, setPassword]   = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading]     = useState(false);
+  const [done, setDone]           = useState(false);
+  const [error, setError]         = useState(null);
+
+  const handleReset = async () => {
+    setLoading(true); setError(null);
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) { setError(error.message); setLoading(false); return; }
+    setDone(true); setLoading(false);
+  };
+
+  const inp = {
+    width: "100%", background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14,
+    padding: "14px 16px", color: "#fff", fontSize: 15,
+    boxSizing: "border-box", fontFamily: "inherit", outline: "none",
+  };
+
+  if (done) return (
+    <div style={{ background: "#0A0A0F", minHeight: "100vh", maxWidth: 430, margin: "0 auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 28px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: "#fff", textAlign: "center" }}>
+      <div style={{ fontSize: 72, marginBottom: 20 }}>✅</div>
+      <div style={{ fontSize: 26, fontWeight: 900, background: "linear-gradient(135deg,#A78BFA,#F472B6,#FB923C)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", marginBottom: 12 }}>Password aggiornata!</div>
+      <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 15, lineHeight: 1.7, marginBottom: 32 }}>La tua password è stata cambiata con successo. Ora puoi accedere con la nuova password! 🎉</div>
+      <button onClick={() => window.location.href = "/"} style={{ width: "100%", padding: "16px", background: "linear-gradient(135deg,#7C3AED,#F472B6)", border: "none", borderRadius: 16, cursor: "pointer", color: "#fff", fontWeight: 800, fontSize: 16, boxShadow: "0 4px 20px rgba(124,58,237,0.4)" }}>
+        Entra nell'app 🚀
+      </button>
+    </div>
+  );
+
+  return (
+    <div style={{ background: "#0A0A0F", minHeight: "100vh", maxWidth: 430, margin: "0 auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 28px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: "#fff" }}>
+      <div style={{ fontSize: 48, marginBottom: 8 }}>🔑</div>
+      <div style={{ fontSize: 28, fontWeight: 900, background: "linear-gradient(135deg,#A78BFA,#F472B6,#FB923C)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", marginBottom: 8 }}>Nuova password</div>
+      <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 14, marginBottom: 32, textAlign: "center" }}>Scegli una nuova password per il tuo account</div>
+      <div style={{ position: "relative", width: "100%", marginBottom: 12 }}>
+        <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Nuova password" type={showPassword ? "text" : "password"} style={{ ...inp, paddingRight: 50 }} />
+        <button onClick={() => setShowPassword(p => !p)} style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 18, opacity: 0.6, padding: 0 }}>
+          {showPassword ? "🙈" : "👁️"}
+        </button>
+      </div>
+      {error && <div style={{ color: "#FF4757", fontSize: 13, marginBottom: 12, textAlign: "center", width: "100%" }}>{error}</div>}
+      <button onClick={handleReset} disabled={loading || password.length < 6} style={{ width: "100%", padding: "16px", background: "linear-gradient(135deg,#7C3AED,#F472B6)", border: "none", borderRadius: 16, cursor: "pointer", color: "#fff", fontWeight: 800, fontSize: 16, boxShadow: "0 4px 20px rgba(124,58,237,0.4)", opacity: (loading || password.length < 6) ? 0.5 : 1 }}>
+        {loading ? "Salvataggio..." : "Salva nuova password 🔐"}
+      </button>
+    </div>
+  );
+}
+
 // ─── Email Confirmed Page ────────────────────────────────────
 function EmailConfirmedPage() {
   return (
@@ -229,6 +281,8 @@ function AuthScreen() {
   const [error, setError]         = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [signupDone, setSignupDone]     = useState(false);
+  const [forgotMode, setForgotMode]     = useState(false);
+  const [forgotDone, setForgotDone]     = useState(false);
 
   const handleSubmit = async () => {
     setLoading(true); setError(null);
@@ -248,6 +302,15 @@ function AuthScreen() {
     finally { setLoading(false); }
   };
 
+  const handleForgot = async () => {
+    setLoading(true); setError(null);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: "https://crowd-me.vercel.app",
+    });
+    if (error) { setError(error.message); setLoading(false); return; }
+    setForgotDone(true); setLoading(false);
+  };
+
   const inp = {
     width: "100%", background: "rgba(255,255,255,0.06)",
     border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14,
@@ -255,7 +318,7 @@ function AuthScreen() {
     boxSizing: "border-box", fontFamily: "inherit", outline: "none", marginBottom: 12,
   };
 
-  // Schermata dopo la registrazione — attendi conferma email
+  // Schermata dopo la registrazione
   if (signupDone) return (
     <div style={{ background: "#0A0A0F", minHeight: "100vh", maxWidth: 430, margin: "0 auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 28px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: "#fff", textAlign: "center" }}>
       <div style={{ fontSize: 72, marginBottom: 20 }}>📧</div>
@@ -266,6 +329,39 @@ function AuthScreen() {
         Clicca il link nell'email per attivare il tuo account e accedere a Crowd Me! 🎉
       </div>
       <button onClick={() => { setSignupDone(false); setMode("login"); }} style={{ width: "100%", padding: "16px", background: "rgba(167,139,250,0.2)", border: "1px solid #A78BFA", borderRadius: 16, cursor: "pointer", color: "#A78BFA", fontWeight: 800, fontSize: 15 }}>
+        Torna al login
+      </button>
+    </div>
+  );
+
+  // Schermata recupero password — email inviata
+  if (forgotDone) return (
+    <div style={{ background: "#0A0A0F", minHeight: "100vh", maxWidth: 430, margin: "0 auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 28px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: "#fff", textAlign: "center" }}>
+      <div style={{ fontSize: 72, marginBottom: 20 }}>📧</div>
+      <div style={{ fontSize: 26, fontWeight: 900, background: "linear-gradient(135deg,#A78BFA,#F472B6,#FB923C)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", marginBottom: 12 }}>Email inviata!</div>
+      <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 15, lineHeight: 1.7, marginBottom: 32 }}>
+        Abbiamo inviato un link per reimpostare la password a<br/>
+        <span style={{ color: "#A78BFA", fontWeight: 700 }}>{email}</span><br/><br/>
+        Controlla anche la cartella spam! 📬
+      </div>
+      <button onClick={() => { setForgotDone(false); setForgotMode(false); }} style={{ width: "100%", padding: "16px", background: "rgba(167,139,250,0.2)", border: "1px solid #A78BFA", borderRadius: 16, cursor: "pointer", color: "#A78BFA", fontWeight: 800, fontSize: 15 }}>
+        Torna al login
+      </button>
+    </div>
+  );
+
+  // Schermata recupero password — inserisci email
+  if (forgotMode) return (
+    <div style={{ background: "#0A0A0F", minHeight: "100vh", maxWidth: 430, margin: "0 auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 28px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: "#fff" }}>
+      <div style={{ fontSize: 48, marginBottom: 8 }}>🔑</div>
+      <div style={{ fontSize: 28, fontWeight: 900, background: "linear-gradient(135deg,#A78BFA,#F472B6,#FB923C)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", marginBottom: 8 }}>Recupera password</div>
+      <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 14, marginBottom: 32, textAlign: "center" }}>Inserisci la tua email e ti mandiamo un link per reimpostare la password</div>
+      <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" type="email" style={inp} />
+      {error && <div style={{ color: "#FF4757", fontSize: 13, marginBottom: 12, textAlign: "center", width: "100%" }}>{error}</div>}
+      <button onClick={handleForgot} disabled={loading} style={{ width: "100%", padding: "16px", background: "linear-gradient(135deg,#7C3AED,#F472B6)", border: "none", borderRadius: 16, cursor: "pointer", color: "#fff", fontWeight: 800, fontSize: 16, boxShadow: "0 4px 20px rgba(124,58,237,0.4)", opacity: loading ? 0.7 : 1, marginBottom: 12 }}>
+        {loading ? "Invio..." : "Invia link di recupero 📧"}
+      </button>
+      <button onClick={() => { setForgotMode(false); setError(null); }} style={{ width: "100%", padding: "14px", background: "transparent", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16, cursor: "pointer", color: "rgba(255,255,255,0.4)", fontWeight: 600, fontSize: 14 }}>
         Torna al login
       </button>
     </div>
@@ -285,23 +381,20 @@ function AuthScreen() {
       </div>
       {mode === "signup" && <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Username" style={inp} />}
       <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" type="email" style={inp} />
-      {/* Password con mostra/nascondi */}
-      <div style={{ position: "relative", width: "100%", marginBottom: 12 }}>
-        <input
-          value={password}
-          onChange={e => setPassword(e.target.value)}
-          placeholder="Password"
-          type={showPassword ? "text" : "password"}
-          style={{ ...inp, marginBottom: 0, paddingRight: 50 }}
-        />
-        <button onClick={() => setShowPassword(p => !p)} style={{
-          position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)",
-          background: "none", border: "none", cursor: "pointer",
-          fontSize: 18, opacity: 0.6, padding: 0,
-        }}>
+      <div style={{ position: "relative", width: "100%", marginBottom: 4 }}>
+        <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" type={showPassword ? "text" : "password"} style={{ ...inp, marginBottom: 0, paddingRight: 50 }} />
+        <button onClick={() => setShowPassword(p => !p)} style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 18, opacity: 0.6, padding: 0 }}>
           {showPassword ? "🙈" : "👁️"}
         </button>
       </div>
+      {mode === "login" && (
+        <div style={{ width: "100%", textAlign: "right", marginBottom: 16 }}>
+          <button onClick={() => { setForgotMode(true); setError(null); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#A78BFA", fontSize: 13, fontWeight: 600, padding: 0 }}>
+            Hai dimenticato la password?
+          </button>
+        </div>
+      )}
+      {mode !== "login" && <div style={{ marginBottom: 16 }} />}
       {error && <div style={{ color: "#FF4757", fontSize: 13, marginBottom: 12, textAlign: "center", width: "100%" }}>{error}</div>}
       <button onClick={handleSubmit} disabled={loading} style={{ width: "100%", padding: "16px", background: "linear-gradient(135deg,#7C3AED,#F472B6)", border: "none", borderRadius: 16, cursor: "pointer", color: "#fff", fontWeight: 800, fontSize: 16, boxShadow: "0 4px 20px rgba(124,58,237,0.4)", opacity: loading ? 0.7 : 1 }}>
         {loading ? "Caricamento..." : mode === "login" ? "Entra 🚀" : "Crea account 🎉"}
@@ -494,12 +587,12 @@ export default function CrowdMe() {
   const types    = ["Tutti", ...Array.from(new Set(venues.map(v => v.type)))];
   const filtered = venues.filter(v => filterType === "Tutti" || v.type === filterType).sort((a, b) => b.crowd - a.crowd);
 
-  // Pagina di conferma email (quando l'utente clicca il link)
+  // Pagina reset password (quando l'utente clicca il link nell'email)
   const urlParams = new URLSearchParams(window.location.search);
   const hashParams = new URLSearchParams(window.location.hash.replace("#", "?"));
-  if (urlParams.get("type") === "signup" || hashParams.get("type") === "signup") {
-    return <EmailConfirmedPage />;
-  }
+  const pageType = urlParams.get("type") || hashParams.get("type");
+  if (pageType === "signup") return <EmailConfirmedPage />;
+  if (pageType === "recovery") return <ResetPasswordPage />;
 
   if (!session) return <AuthScreen />;
 
