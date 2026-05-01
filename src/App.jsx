@@ -203,7 +203,7 @@ function MapboxMap({ venues, userLocation, onVenueClick }) {
 }
 
 // ─── Reset Password Page (quando l'utente clicca il link nell'email) ──
-function ResetPasswordPage() {
+function ResetPasswordPage({ onDone }) {
   const [password, setPassword]   = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading]     = useState(false);
@@ -215,6 +215,7 @@ function ResetPasswordPage() {
     const { error } = await supabase.auth.updateUser({ password });
     if (error) { setError(error.message); setLoading(false); return; }
     setDone(true); setLoading(false);
+    setTimeout(() => { if (onDone) onDone(); else window.location.href = "/"; }, 2500);
   };
 
   const inp = {
@@ -228,10 +229,7 @@ function ResetPasswordPage() {
     <div style={{ background: "#0A0A0F", minHeight: "100vh", maxWidth: 430, margin: "0 auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 28px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: "#fff", textAlign: "center" }}>
       <div style={{ fontSize: 72, marginBottom: 20 }}>✅</div>
       <div style={{ fontSize: 26, fontWeight: 900, background: "linear-gradient(135deg,#A78BFA,#F472B6,#FB923C)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", marginBottom: 12 }}>Password aggiornata!</div>
-      <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 15, lineHeight: 1.7, marginBottom: 32 }}>La tua password è stata cambiata con successo. Ora puoi accedere con la nuova password! 🎉</div>
-      <button onClick={() => window.location.href = "/"} style={{ width: "100%", padding: "16px", background: "linear-gradient(135deg,#7C3AED,#F472B6)", border: "none", borderRadius: 16, cursor: "pointer", color: "#fff", fontWeight: 800, fontSize: 16, boxShadow: "0 4px 20px rgba(124,58,237,0.4)" }}>
-        Entra nell'app 🚀
-      </button>
+      <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 15, lineHeight: 1.7, marginBottom: 32 }}>La tua password è stata cambiata con successo. Stai per essere reindirizzato... 🎉</div>
     </div>
   );
 
@@ -430,10 +428,20 @@ export default function CrowdMe() {
   const [following, setFollowing]       = useState([]);
   const [followers, setFollowers]       = useState([]);
 
+  const [isRecovery, setIsRecovery] = useState(false);
+
   // Auth
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setIsRecovery(true);
+        setSession(s);
+      } else {
+        setIsRecovery(false);
+        setSession(s);
+      }
+    });
     return () => subscription.unsubscribe();
   }, []);
 
@@ -592,7 +600,7 @@ export default function CrowdMe() {
   const hashParams = new URLSearchParams(window.location.hash.replace("#", "?"));
   const pageType = urlParams.get("type") || hashParams.get("type");
   if (pageType === "signup") return <EmailConfirmedPage />;
-  if (pageType === "recovery") return <ResetPasswordPage />;
+  if (pageType === "recovery" || isRecovery) return <ResetPasswordPage onDone={() => { setIsRecovery(false); window.location.href = "/"; }} />;
 
   if (!session) return <AuthScreen />;
 
